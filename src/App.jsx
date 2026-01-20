@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Download, Users, Plus, Trash2, Package, Building2 } from 'lucide-react';
+import { FileText, Download, Users, Plus, Trash2, Package } from 'lucide-react';
 
 const FixedEquipmentQuoteTool = () => {
   const [step, setStep] = useState(1);
@@ -365,11 +365,11 @@ const FixedEquipmentQuoteTool = () => {
             <div className="flex items-center gap-4">
               {/* Logo */}
               <div className="flex items-center gap-2">
-                <Building2 className="w-10 h-10 text-[#03989e]" />
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">Reliant Medical</h1>
-                  <p className="text-xs text-gray-500">Fixed Equipment Solutions</p>
-                </div>
+                <img 
+                  src="/Green Cross Medical Modern Logo.svg" 
+                  alt="Reliant Medical Rentals" 
+                  className="h-48 w-auto"
+                />
               </div>
               <div className="hidden md:block h-8 w-px bg-gray-300 mx-2"></div>
               <span className="hidden md:block text-gray-600 font-medium">Fixed Equipment Proforma Generator</span>
@@ -772,10 +772,7 @@ const FixedEquipmentQuoteTool = () => {
 
               {/* Building Costs */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3 flex items-center gap-2">
-                  <Building2 className="w-4 h-4" />
-                  Building & Facility Costs
-                </h3>
+                <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Building & Facility Costs</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cost per Sq Ft ($/year)</label>
@@ -923,11 +920,11 @@ const FixedEquipmentQuoteTool = () => {
               <div className="border-b-2 border-black pb-6 mb-6">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
                   <div className="flex items-center gap-3">
-                    <Building2 className="w-16 h-16 text-[#03989e]" />
-                    <div>
-                      <h1 className="text-2xl font-bold text-gray-900">Reliant Medical</h1>
-                      <p className="text-sm text-gray-500">Fixed Equipment Solutions</p>
-                    </div>
+                    <img 
+                      src="/Green Cross Medical Modern Logo.svg" 
+                      alt="Reliant Medical Rentals" 
+                      className="h-48 sm:h-64 w-auto"
+                    />
                   </div>
                   <div className="sm:text-right">
                     <h2 className="text-xl sm:text-2xl font-bold text-black">PROFORMA</h2>
