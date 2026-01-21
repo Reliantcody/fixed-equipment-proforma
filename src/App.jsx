@@ -1067,7 +1067,10 @@ const FixedEquipmentQuoteTool = () => {
                           </tr>
                         ))}
                         <tr className="bg-gray-50 font-semibold">
-                          <td colSpan="3" className="px-3 py-2 border border-gray-300 text-right text-sm">Totals:</td>
+                          <td colSpan="2" className="px-3 py-2 border border-gray-300 text-right text-sm">Totals:</td>
+                          <td className="px-3 py-2 border border-gray-300 text-right text-gray-700 text-sm">
+                            ${formatNumber(formData.equipment.reduce((sum, equip) => sum + (equip.ownership === 'lease' ? equip.leaseAmount : 0), 0))}
+                          </td>
                           <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">
                             ${quote.totalEquipmentMonthly.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}/mo
                           </td>
@@ -1101,47 +1104,49 @@ const FixedEquipmentQuoteTool = () => {
                 </div>
               )}
 
-              {/* Key Assumptions - Per Modality */}
-              <div className="mb-6">
-                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Operating Assumptions by Modality</h3>
-                <div className="overflow-x-auto -mx-4 sm:mx-0">
-                  <div className="inline-block min-w-full px-4 sm:px-0">
-                    <table className="w-full border-collapse min-w-[600px]">
-                      <thead>
-                        <tr className="bg-gradient-to-r from-[#03989e]/20 to-[#ff66c4]/20">
-                          <th className="text-left px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Modality</th>
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Days/Yr</th>
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Scans/Day</th>
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Rate</th>
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">PACS</th>
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Per Read</th>
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Yr 1 Scans</th>
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Yr 1 Revenue</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {quote.modalityMetrics.map((m, idx) => (
-                          <tr key={idx}>
-                            <td className="px-3 py-2 border border-gray-300 text-sm font-medium text-gray-900">{m.type}</td>
-                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">{m.operatingDays}</td>
-                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">{m.scansPerDay}</td>
-                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.blendedRate}</td>
-                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.pacsStoragePerStudy}</td>
-                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.perReadCost}</td>
-                            <td className="px-3 py-2 border border-gray-300 text-right text-sm font-semibold text-[#03989e]">{m.scansByYear[0].toLocaleString()}</td>
-                            <td className="px-3 py-2 border border-gray-300 text-right text-sm font-semibold text-[#03989e]">${m.revenueByYear[0].toLocaleString()}</td>
+              {/* ROI ANALYSIS SECTION - Starts on new page when printed */}
+              <div className="print:break-before-page">
+                {/* Key Assumptions - Per Modality */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Operating Assumptions by Modality</h3>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full px-4 sm:px-0">
+                      <table className="w-full border-collapse min-w-[600px]">
+                        <thead>
+                          <tr className="bg-gradient-to-r from-[#03989e]/20 to-[#ff66c4]/20">
+                            <th className="text-left px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Modality</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Days/Yr</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Scans/Day</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Rate</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">PACS</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Per Read</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Yr 1 Scans</th>
+                            <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Yr 1 Revenue</th>
                           </tr>
-                        ))}
-                        <tr className="bg-gray-50 font-semibold">
-                          <td colSpan="6" className="px-3 py-2 border border-gray-300 text-right text-sm">Combined Totals:</td>
-                          <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">{quote.scansByYear[0].toLocaleString()}</td>
-                          <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">${quote.revenueByYear[0].toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {quote.modalityMetrics.map((m, idx) => (
+                            <tr key={idx}>
+                              <td className="px-3 py-2 border border-gray-300 text-sm font-medium text-gray-900">{m.type}</td>
+                              <td className="px-3 py-2 border border-gray-300 text-right text-sm">{m.operatingDays}</td>
+                              <td className="px-3 py-2 border border-gray-300 text-right text-sm">{m.scansPerDay}</td>
+                              <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.blendedRate}</td>
+                              <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.pacsStoragePerStudy}</td>
+                              <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.perReadCost}</td>
+                              <td className="px-3 py-2 border border-gray-300 text-right text-sm font-semibold text-[#03989e]">{m.scansByYear[0].toLocaleString()}</td>
+                              <td className="px-3 py-2 border border-gray-300 text-right text-sm font-semibold text-[#03989e]">${m.revenueByYear[0].toLocaleString()}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-50 font-semibold">
+                            <td colSpan="6" className="px-3 py-2 border border-gray-300 text-right text-sm">Combined Totals:</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">{quote.scansByYear[0].toLocaleString()}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">${quote.revenueByYear[0].toLocaleString()}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
-              </div>
 
               {/* Financial Projection P&L */}
               <div className="mb-6">
@@ -1267,6 +1272,7 @@ const FixedEquipmentQuoteTool = () => {
                   </div>
                 )}
               </div>
+              </div> {/* End of ROI ANALYSIS SECTION */}
 
               {/* Terms */}
               <div className="text-xs text-gray-500 border-t border-gray-200 pt-4">
@@ -1307,6 +1313,7 @@ const FixedEquipmentQuoteTool = () => {
           .print\\:px-0 { padding-left: 0 !important; padding-right: 0 !important; }
           .print\\:max-w-none { max-width: none !important; }
           .print\\:space-y-0 > * + * { margin-top: 0 !important; }
+          .print\\:break-before-page { break-before: page !important; page-break-before: always !important; }
           @page { margin: 0.5in; }
         }
       `}</style>
