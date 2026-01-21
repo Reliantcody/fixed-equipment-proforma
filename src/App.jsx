@@ -9,13 +9,14 @@ const FixedEquipmentQuoteTool = () => {
     contactName: '',
     contactNumber: '',
     contactEmail: '',
+    address: '',
     
     // Sales Rep
     salesRep: 'Joe Shafe',
     salesRepEmail: 'joseph@clearmedimages.com',
     salesRepPhone: '520-631-7548',
     
-    // Equipment Items (array of equipment with ownership details)
+    // Equipment Items (array of equipment with ownership details and per-modality metrics)
     equipment: [
       {
         id: 1,
@@ -26,22 +27,20 @@ const FixedEquipmentQuoteTool = () => {
         rentalTerm: 60, // months
         leaseAmount: 0,
         leaseTerm: 60,
-        leaseRate: 7.99
+        leaseRate: 7.99,
+        // Per-modality operating metrics
+        operatingDaysPerYear: 220,
+        scansPerDay: 30,
+        blendedRatePerScan: 180,
+        serviceContractAnnual: 50000,
+        // Per-modality study costs
+        pacsStoragePerStudy: 2,
+        perReadCost: 25
       }
     ],
     
     // Projection Settings
     projectionYears: 5,
-    
-    // Key Assumptions
-    operatingDaysPerYear: 220,
-    scansPerDay: 30,
-    blendedRatePerScan: 180,
-    serviceContractMonthly: 4167,
-    
-    // Per Study Costs
-    pacsStoragePerStudy: 2,
-    radiologistReadPerStudy: 25,
     
     // Staffing (pre-populated with Tech and Med Clerk at 60k each)
     staff: [
@@ -135,7 +134,13 @@ const FixedEquipmentQuoteTool = () => {
         rentalTerm: 60,
         leaseAmount: 0,
         leaseTerm: 60,
-        leaseRate: 7.99
+        leaseRate: 7.99,
+        operatingDaysPerYear: 220,
+        scansPerDay: 30,
+        blendedRatePerScan: 180,
+        serviceContractAnnual: 50000,
+        pacsStoragePerStudy: 2,
+        perReadCost: 25
       }]
     }));
   };
@@ -214,33 +219,92 @@ const FixedEquipmentQuoteTool = () => {
     return 0;
   };
 
+  // Get yearly service contract for equipment, accounting for rental/lease terms ending
+  const getServiceContractYearly = (equip, yearIndex) => {
+    const term = equip.ownership === 'rent' ? equip.rentalTerm : equip.leaseTerm;
+    const yearStartMonth = yearIndex * 12 + 1;
+    const yearEndMonth = (yearIndex + 1) * 12;
+    const termEndMonth = term;
+    
+    if (yearStartMonth > termEndMonth) {
+      return 0; // Term has ended
+    }
+    
+    // Calculate pro-rated amount if term ends mid-year
+    const monthsInYear = Math.min(yearEndMonth, termEndMonth) - yearStartMonth + 1;
+    return (equip.serviceContractAnnual / 12) * monthsInYear;
+  };
+
   const calculateQuote = () => {
     const numYears = formData.projectionYears;
     const growthRates = [0, formData.year2Growth, formData.year3Growth, formData.year4Growth, formData.year5Growth, 0];
     
-    // Build scans by year dynamically
-    const scansByYear = [];
-    let currentScans = formData.scansPerDay * formData.operatingDaysPerYear;
-    for (let i = 0; i < numYears; i++) {
-      if (i === 0) {
-        scansByYear.push(currentScans);
-      } else {
-        currentScans = Math.round(currentScans * (1 + (growthRates[i] || 0) / 100));
-        scansByYear.push(currentScans);
+    // Calculate per-modality metrics
+    const modalityMetrics = formData.equipment.map(equip => {
+      const year1Scans = equip.scansPerDay * equip.operatingDaysPerYear;
+      const modalityScansByYear = [];
+      let currentScans = year1Scans;
+      
+      for (let i = 0; i < numYears; i++) {
+        if (i === 0) {
+          modalityScansByYear.push(currentScans);
+        } else {
+          currentScans = Math.round(currentScans * (1 + (growthRates[i] || 0) / 100));
+          modalityScansByYear.push(currentScans);
+        }
       }
-    }
+      
+      return {
+        type: equip.type,
+        operatingDays: equip.operatingDaysPerYear,
+        scansPerDay: equip.scansPerDay,
+        blendedRate: equip.blendedRatePerScan,
+        serviceContractAnnual: equip.serviceContractAnnual,
+        pacsStoragePerStudy: equip.pacsStoragePerStudy,
+        perReadCost: equip.perReadCost,
+        scansByYear: modalityScansByYear,
+        revenueByYear: modalityScansByYear.map(scans => scans * equip.blendedRatePerScan),
+        pacsCostByYear: modalityScansByYear.map(scans => scans * equip.pacsStoragePerStudy),
+        perReadCostByYear: modalityScansByYear.map(scans => scans * equip.perReadCost)
+      };
+    });
     
-    const revenueByYear = scansByYear.map(scans => scans * formData.blendedRatePerScan);
+    // Aggregate totals across all modalities
+    const scansByYear = [];
+    const revenueByYear = [];
+    const totalPacsCostByYear = [];
+    const totalPerReadCostByYear = [];
+    for (let i = 0; i < numYears; i++) {
+      scansByYear.push(modalityMetrics.reduce((sum, m) => sum + m.scansByYear[i], 0));
+      revenueByYear.push(modalityMetrics.reduce((sum, m) => sum + m.revenueByYear[i], 0));
+      totalPacsCostByYear.push(modalityMetrics.reduce((sum, m) => sum + m.pacsCostByYear[i], 0));
+      totalPerReadCostByYear.push(modalityMetrics.reduce((sum, m) => sum + m.perReadCostByYear[i], 0));
+    }
     
     // Calculate total equipment monthly payments (for display purposes - Year 1)
     const totalEquipmentMonthly = formData.equipment.reduce((sum, equip) => sum + getEquipmentMonthlyPayment(equip), 0);
     
+    // Calculate total service contract (sum of all modalities - Year 1)
+    const totalServiceContractAnnual = formData.equipment.reduce((sum, equip) => sum + equip.serviceContractAnnual, 0);
+    
     // Calculate annual building cost
     const buildingCostAnnual = formData.buildingCostPerSqFt * formData.buildingSquareFeet;
     
+    // Calculate weighted average blended rate for break-even analysis
+    const totalYear1Scans = scansByYear[0];
+    const totalYear1Revenue = revenueByYear[0];
+    const weightedBlendedRate = totalYear1Scans > 0 ? totalYear1Revenue / totalYear1Scans : 0;
+    
+    // Calculate weighted average per-study costs for break-even
+    const weightedPacsPerStudy = totalYear1Scans > 0 ? totalPacsCostByYear[0] / totalYear1Scans : 0;
+    const weightedPerReadCost = totalYear1Scans > 0 ? totalPerReadCostByYear[0] / totalYear1Scans : 0;
+    
     const calculateYearExpenses = (yearIndex, revenue) => {
       const staffing = formData.staff.reduce((sum, s) => sum + s.salary, 0);
-      const serviceContract = formData.serviceContractMonthly * 12;
+      
+      // Service contract - pro-rated based on each equipment's term
+      const serviceContract = formData.equipment.reduce((sum, equip) => sum + getServiceContractYearly(equip, yearIndex), 0);
+      
       const equipmentPayments = formData.equipment.reduce((sum, equip) => sum + getEquipmentYearlyPayment(equip, yearIndex), 0);
       
       // Fixed building costs
@@ -254,9 +318,9 @@ const FixedEquipmentQuoteTool = () => {
       const physicist = formData.physicistAnnual * (1 + yearIndex * 0.02);
       const it = formData.itAnnual * (1 + yearIndex * 0.05);
       
-      // Per study costs
-      const pacs = scansByYear[yearIndex] * formData.pacsStoragePerStudy;
-      const radiologist = scansByYear[yearIndex] * formData.radiologistReadPerStudy;
+      // Per study costs (aggregated from all modalities) - these scale with scan volume
+      const pacs = totalPacsCostByYear[yearIndex];
+      const perRead = totalPerReadCostByYear[yearIndex];
       
       // Other costs
       const medicalSupplies = formData.medicalSuppliesAnnual * (1 + yearIndex * 0.02);
@@ -265,12 +329,12 @@ const FixedEquipmentQuoteTool = () => {
       const total = staffing + serviceContract + equipmentPayments +
                    buildingCost + utilities + housekeeping + insurance + 
                    marketing + billing + tracking + physicist + it +
-                   pacs + radiologist + medicalSupplies + contingency;
+                   pacs + perRead + medicalSupplies + contingency;
       
       return {
         staffing, serviceContract, equipmentPayments,
         buildingCost, utilities, housekeeping, insurance, marketing,
-        billing, tracking, physicist, it, pacs, radiologist,
+        billing, tracking, physicist, it, pacs, perRead,
         medicalSupplies, contingency, total
       };
     };
@@ -290,8 +354,13 @@ const FixedEquipmentQuoteTool = () => {
     
     const costPerScan = expensesByYear[0].total / scansByYear[0];
     const profitPerScan = profitByYear[0] / scansByYear[0];
-    const dailyRevenue = revenueByYear[0] / formData.operatingDaysPerYear;
-    const dailyProfit = profitByYear[0] / formData.operatingDaysPerYear;
+    
+    // Calculate weighted average operating days for daily metrics
+    const totalWeightedDays = modalityMetrics.reduce((sum, m) => sum + (m.operatingDays * m.scansByYear[0]), 0);
+    const avgOperatingDays = totalYear1Scans > 0 ? totalWeightedDays / totalYear1Scans : 220;
+    
+    const dailyRevenue = revenueByYear[0] / avgOperatingDays;
+    const dailyProfit = profitByYear[0] / avgOperatingDays;
     
     // Fixed costs for break-even analysis
     const fixedCosts = expensesByYear[0].staffing + expensesByYear[0].serviceContract + 
@@ -301,13 +370,14 @@ const FixedEquipmentQuoteTool = () => {
                       expensesByYear[0].tracking + expensesByYear[0].physicist +
                       expensesByYear[0].it + expensesByYear[0].contingency;
     
-    const variableCostPerScan = (expensesByYear[0].pacs + 
-                                expensesByYear[0].radiologist + expensesByYear[0].medicalSupplies +
-                                expensesByYear[0].billing) / scansByYear[0];
+    // Variable costs per scan (PACS, Per Read, portion of medical supplies, billing)
+    const variableCostPerScan = weightedPacsPerStudy + weightedPerReadCost + 
+                                (expensesByYear[0].medicalSupplies / scansByYear[0]) +
+                                (expensesByYear[0].billing / scansByYear[0]);
     
-    const contributionMarginPerScan = formData.blendedRatePerScan - variableCostPerScan;
+    const contributionMarginPerScan = weightedBlendedRate - variableCostPerScan;
     const monthlyBreakEvenScans = (fixedCosts / 12) / contributionMarginPerScan;
-    const dailyBreakEvenScans = monthlyBreakEvenScans / (formData.operatingDaysPerYear / 12);
+    const dailyBreakEvenScans = monthlyBreakEvenScans / (avgOperatingDays / 12);
     
     // Total Capital Invested calculation (only leases count as capital investment)
     let totalCapitalInvested = 0;
@@ -327,14 +397,16 @@ const FixedEquipmentQuoteTool = () => {
     
     return {
       numYears,
+      modalityMetrics,
       scansByYear, revenueByYear, expensesByYear, profitByYear, profitMarginByYear,
       cumulativeRevenue, cumulativeExpenses, cumulativeProfit,
       monthlyScans, monthlyRevenue, monthlyExpenses, monthlyProfit,
       costPerScan, profitPerScan, dailyRevenue, dailyProfit,
       monthlyBreakEvenScans, dailyBreakEvenScans, totalCapitalInvested,
       year1ROI, paybackPeriod, totalEquipmentMonthly,
-      serviceContractAnnual: formData.serviceContractMonthly * 12,
+      totalServiceContractAnnual,
       buildingCostAnnual,
+      avgOperatingDays,
       quoteDate, quoteNumber
     };
   };
@@ -451,6 +523,12 @@ const FixedEquipmentQuoteTool = () => {
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e] transition-all"
                       placeholder="contact@business.com" />
                   </div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <input type="text" name="address" value={formData.address} onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e] transition-all"
+                    placeholder="123 Main St, City, State ZIP" />
                 </div>
               </div>
 
@@ -640,6 +718,64 @@ const FixedEquipmentQuoteTool = () => {
                         )}
                       </div>
                     )}
+
+                    {/* Per-Modality Operating Metrics */}
+                    <div className="mt-4 p-4 bg-gradient-to-r from-[#03989e]/10 to-[#ff66c4]/10 rounded-lg border border-[#03989e]/30">
+                      <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-[#03989e] rounded-full"></span>
+                        Operating Metrics for {equip.type || `Equipment #${idx + 1}`}
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Operating Days/Year</label>
+                          <input type="number" value={equip.operatingDaysPerYear}
+                            onChange={(e) => handleEquipmentChange(idx, 'operatingDaysPerYear', parseInt(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e] text-sm" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Scans per Day</label>
+                          <input type="number" value={equip.scansPerDay}
+                            onChange={(e) => handleEquipmentChange(idx, 'scansPerDay', parseInt(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e] text-sm" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Blended Rate/Scan ($)</label>
+                          <input type="number" value={equip.blendedRatePerScan}
+                            onChange={(e) => handleEquipmentChange(idx, 'blendedRatePerScan', parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e] text-sm" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Service Contract ($/year)</label>
+                          <input type="text" value={formatNumber(equip.serviceContractAnnual)}
+                            onChange={(e) => handleEquipmentChange(idx, 'serviceContractAnnual', parseFormattedNumber(e.target.value))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4] text-sm" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">PACS Storage ($/study)</label>
+                          <input type="number" value={equip.pacsStoragePerStudy} step="0.01"
+                            onChange={(e) => handleEquipmentChange(idx, 'pacsStoragePerStudy', parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4] text-sm" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Per Read ($/study)</label>
+                          <input type="number" value={equip.perReadCost} step="0.01"
+                            onChange={(e) => handleEquipmentChange(idx, 'perReadCost', parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4] text-sm" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div className="bg-white/50 p-2 rounded">
+                          <span className="text-gray-600">Annual Scans:</span>
+                          <span className="font-semibold text-[#03989e] ml-2">{(equip.operatingDaysPerYear * equip.scansPerDay).toLocaleString()}</span>
+                        </div>
+                        <div className="bg-white/50 p-2 rounded">
+                          <span className="text-gray-600">Annual Revenue:</span>
+                          <span className="font-semibold text-[#03989e] ml-2">${(equip.operatingDaysPerYear * equip.scansPerDay * equip.blendedRatePerScan).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -677,25 +813,6 @@ const FixedEquipmentQuoteTool = () => {
                     )}
                   </div>
                 ))}
-              </div>
-
-              {/* Service Contract - Equipment Only */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Equipment Service Contract</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Equipment Service ($/month)</label>
-                    <input type="text" value={formatNumber(formData.serviceContractMonthly)}
-                      onChange={(e) => setFormData(prev => ({...prev, serviceContractMonthly: parseFormattedNumber(e.target.value)}))}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e]" />
-                    <p className="text-xs text-gray-500 mt-1">Annual: ${(formData.serviceContractMonthly * 12).toLocaleString()}</p>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="bg-[#03989e]/10 p-3 rounded-lg border border-[#03989e]/30 text-sm text-gray-700">
-                      <p><span className="font-semibold text-[#03989e]">Note:</span> This service contract cost will appear as a line item on the proforma.</p>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Projection Settings */}
@@ -748,28 +865,6 @@ const FixedEquipmentQuoteTool = () => {
             </h2>
             
             <div className="space-y-6">
-              {/* Operating Metrics */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Operating Metrics</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Operating Days/Year</label>
-                    <input type="number" name="operatingDaysPerYear" value={formData.operatingDaysPerYear} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e]" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Scans per Day</label>
-                    <input type="number" name="scansPerDay" value={formData.scansPerDay} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e]" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Blended Rate/Scan ($)</label>
-                    <input type="number" name="blendedRatePerScan" value={formData.blendedRatePerScan} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e]" />
-                  </div>
-                </div>
-              </div>
-
               {/* Building Costs */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Building & Facility Costs</h3>
@@ -852,38 +947,21 @@ const FixedEquipmentQuoteTool = () => {
                 </div>
               </div>
 
-              {/* Per Study & Other Costs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Per Study Costs</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">PACS Storage ($)</label>
-                      <input type="number" name="pacsStoragePerStudy" value={formData.pacsStoragePerStudy} onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e]" step="0.01" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Radiologist Read ($)</label>
-                      <input type="number" name="radiologistReadPerStudy" value={formData.radiologistReadPerStudy} onChange={handleInputChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#03989e] focus:border-[#03989e]" step="0.01" />
-                    </div>
+              {/* Other Annual Costs */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Other Annual Costs</h3>
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Medical Supplies ($)</label>
+                    <input type="text" value={formatNumber(formData.medicalSuppliesAnnual)}
+                      onChange={(e) => setFormData(prev => ({...prev, medicalSuppliesAnnual: parseFormattedNumber(e.target.value)}))}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4]" />
                   </div>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Other Annual Costs</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Medical Supplies ($)</label>
-                      <input type="text" value={formatNumber(formData.medicalSuppliesAnnual)}
-                        onChange={(e) => setFormData(prev => ({...prev, medicalSuppliesAnnual: parseFormattedNumber(e.target.value)}))}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4]" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Contingency ($)</label>
-                      <input type="text" value={formatNumber(formData.contingencyAnnual)}
-                        onChange={(e) => setFormData(prev => ({...prev, contingencyAnnual: parseFormattedNumber(e.target.value)}))}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4]" />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contingency ($)</label>
+                    <input type="text" value={formatNumber(formData.contingencyAnnual)}
+                      onChange={(e) => setFormData(prev => ({...prev, contingencyAnnual: parseFormattedNumber(e.target.value)}))}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4]" />
                   </div>
                 </div>
               </div>
@@ -938,6 +1016,7 @@ const FixedEquipmentQuoteTool = () => {
                     <p className="text-xs font-bold text-gray-800 uppercase tracking-wide mb-2">Bill To</p>
                     <p className="font-semibold text-gray-900">{formData.businessName}</p>
                     <p className="text-gray-700">{formData.contactName}</p>
+                    {formData.address && <p className="text-gray-600 text-sm">{formData.address}</p>}
                     <p className="text-gray-600 text-sm">{formData.contactNumber}</p>
                     <p className="text-gray-600 text-sm">{formData.contactEmail}</p>
                   </div>
@@ -961,7 +1040,8 @@ const FixedEquipmentQuoteTool = () => {
                           <th className="text-left px-3 py-2 text-xs sm:text-sm font-semibold text-gray-700 border border-gray-300">Equipment</th>
                           <th className="text-left px-3 py-2 text-xs sm:text-sm font-semibold text-gray-700 border border-gray-300">Ownership</th>
                           <th className="text-right px-3 py-2 text-xs sm:text-sm font-semibold text-gray-700 border border-gray-300">Amount/Value</th>
-                          <th className="text-right px-3 py-2 text-xs sm:text-sm font-semibold text-gray-700 border border-gray-300">Monthly Payment</th>
+                          <th className="text-right px-3 py-2 text-xs sm:text-sm font-semibold text-gray-700 border border-gray-300">Equipment $/mo</th>
+                          <th className="text-right px-3 py-2 text-xs sm:text-sm font-semibold text-gray-700 border border-gray-300">Service $/yr</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -981,25 +1061,18 @@ const FixedEquipmentQuoteTool = () => {
                             <td className="px-3 py-2 border border-gray-300 text-right font-semibold text-[#03989e] text-sm">
                               ${getEquipmentMonthlyPayment(equip).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                             </td>
+                            <td className="px-3 py-2 border border-gray-300 text-right font-semibold text-[#ff66c4] text-sm">
+                              ${formatNumber(equip.serviceContractAnnual)}
+                            </td>
                           </tr>
                         ))}
-                        {/* Service Contract Line Item */}
-                        <tr className="bg-blue-50">
-                          <td className="px-3 py-2 border border-gray-300 text-sm">
-                            <p className="font-medium text-gray-900">Equipment Service Contract</p>
-                          </td>
-                          <td className="px-3 py-2 border border-gray-300 text-gray-700 text-sm">Monthly</td>
-                          <td className="px-3 py-2 border border-gray-300 text-right text-gray-700 text-sm">
-                            ${formatNumber(quote.serviceContractAnnual)}/yr
-                          </td>
-                          <td className="px-3 py-2 border border-gray-300 text-right font-semibold text-[#03989e] text-sm">
-                            ${formatNumber(formData.serviceContractMonthly)}
-                          </td>
-                        </tr>
                         <tr className="bg-gray-50 font-semibold">
-                          <td colSpan="3" className="px-3 py-2 border border-gray-300 text-right text-sm">Total Monthly Equipment & Service Cost:</td>
+                          <td colSpan="3" className="px-3 py-2 border border-gray-300 text-right text-sm">Totals:</td>
                           <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">
-                            ${(quote.totalEquipmentMonthly + formData.serviceContractMonthly).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                            ${quote.totalEquipmentMonthly.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}/mo
+                          </td>
+                          <td className="px-3 py-2 border border-gray-300 text-right text-[#ff66c4] text-sm">
+                            ${formatNumber(quote.totalServiceContractAnnual)}/yr
                           </td>
                         </tr>
                       </tbody>
@@ -1028,21 +1101,44 @@ const FixedEquipmentQuoteTool = () => {
                 </div>
               )}
 
-              {/* Key Assumptions */}
+              {/* Key Assumptions - Per Modality */}
               <div className="mb-6">
-                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Key Assumptions</h3>
-                <div className="grid grid-cols-3 gap-4 bg-gradient-to-r from-[#03989e]/10 to-[#ff66c4]/10 p-4 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-600">Operating Days/Year</p>
-                    <p className="text-xl font-bold text-[#03989e]">{formData.operatingDaysPerYear}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-600">Scans per Day</p>
-                    <p className="text-xl font-bold text-[#03989e]">{formData.scansPerDay}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-600">Blended Rate/Scan</p>
-                    <p className="text-xl font-bold text-[#03989e]">${formData.blendedRatePerScan}</p>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Operating Assumptions by Modality</h3>
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                  <div className="inline-block min-w-full px-4 sm:px-0">
+                    <table className="w-full border-collapse min-w-[600px]">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-[#03989e]/20 to-[#ff66c4]/20">
+                          <th className="text-left px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Modality</th>
+                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Days/Yr</th>
+                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Scans/Day</th>
+                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Rate</th>
+                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">PACS</th>
+                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Per Read</th>
+                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Yr 1 Scans</th>
+                          <th className="text-right px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300">Yr 1 Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {quote.modalityMetrics.map((m, idx) => (
+                          <tr key={idx}>
+                            <td className="px-3 py-2 border border-gray-300 text-sm font-medium text-gray-900">{m.type}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">{m.operatingDays}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">{m.scansPerDay}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.blendedRate}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.pacsStoragePerStudy}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-sm">${m.perReadCost}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-sm font-semibold text-[#03989e]">{m.scansByYear[0].toLocaleString()}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right text-sm font-semibold text-[#03989e]">${m.revenueByYear[0].toLocaleString()}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-gray-50 font-semibold">
+                          <td colSpan="6" className="px-3 py-2 border border-gray-300 text-right text-sm">Combined Totals:</td>
+                          <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">{quote.scansByYear[0].toLocaleString()}</td>
+                          <td className="px-3 py-2 border border-gray-300 text-right text-[#03989e] text-sm">${quote.revenueByYear[0].toLocaleString()}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
