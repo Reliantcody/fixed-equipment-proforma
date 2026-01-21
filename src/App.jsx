@@ -13,6 +13,7 @@ const FixedEquipmentQuoteTool = () => {
     
     // Sales Rep
     salesRep: 'Joe Shafe',
+    salesRepTitle: 'CEO',
     salesRepEmail: 'joseph@clearmedimages.com',
     salesRepPhone: '520-631-7548',
     
@@ -74,9 +75,10 @@ const FixedEquipmentQuoteTool = () => {
   const [quote, setQuote] = useState(null);
 
   const salesReps = {
-    'Joe Shafe': { email: 'joseph@clearmedimages.com', phone: '520-631-7548' },
-    'Brian Bernal': { email: 'brian@clearmedimages.com', phone: '520-XXX-XXXX' },
-    'Cody Thompson': { email: 'Cody@reliantmedrentals.com', phone: '530-680-6072' }
+    'Joe Shafe': { title: 'CEO', email: 'joseph@clearmedimages.com', phone: '520-631-7548' },
+    'Brian Bernal': { title: 'National Accounts', email: 'bbernal@reliantcapitalgrp.com', phone: '562-201-6693' },
+    'Cody Thompson': { title: 'COO', email: 'Cody@reliantmedrentals.com', phone: '530-680-6072' },
+    'William Ozemok': { title: 'Sales Representative', email: 'william@clearmedimages.com', phone: '915-490-2333' }
   };
 
   // Helper functions
@@ -103,6 +105,7 @@ const FixedEquipmentQuoteTool = () => {
       setFormData(prev => ({
         ...prev,
         salesRep: value,
+        salesRepTitle: salesReps[value].title,
         salesRepEmail: salesReps[value].email,
         salesRepPhone: salesReps[value].phone
       }));
@@ -440,7 +443,7 @@ const FixedEquipmentQuoteTool = () => {
                 <img 
                   src="/Green Cross Medical Modern Logo.svg" 
                   alt="Reliant Medical Rentals" 
-                  className="h-48 w-auto"
+                  className="h-24 w-auto"
                 />
               </div>
               <div className="hidden md:block h-8 w-px bg-gray-300 mx-2"></div>
@@ -540,13 +543,15 @@ const FixedEquipmentQuoteTool = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Select Rep</label>
                     <select name="salesRep" value={formData.salesRep} onChange={handleInputChange}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff66c4] focus:border-[#ff66c4] transition-all">
-                      <option value="Joe Shafe">Joe Shafe</option>
-                      <option value="Brian Bernal">Brian Bernal</option>
-                      <option value="Cody Thompson">Cody Thompson</option>
+                      <option value="Joe Shafe">Joe Shafe - CEO</option>
+                      <option value="Brian Bernal">Brian Bernal - National Accounts</option>
+                      <option value="Cody Thompson">Cody Thompson - COO</option>
+                      <option value="William Ozemok">William Ozemok - Sales Representative</option>
                     </select>
                   </div>
                   <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                     <p className="text-xs text-gray-500 mb-1">Contact Info</p>
+                    <p className="text-sm font-medium text-gray-800">{formData.salesRepTitle}</p>
                     <p className="text-sm text-gray-800">{formData.salesRepEmail}</p>
                     <p className="text-sm text-gray-800">{formData.salesRepPhone}</p>
                   </div>
@@ -646,16 +651,15 @@ const FixedEquipmentQuoteTool = () => {
                               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Rental Term (months)</label>
-                            <select value={equip.rentalTerm} onChange={(e) => handleEquipmentChange(idx, 'rentalTerm', parseInt(e.target.value))}
-                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                              <option value={12}>12 months (1 year)</option>
-                              <option value={24}>24 months (2 years)</option>
-                              <option value={36}>36 months (3 years)</option>
-                              <option value={48}>48 months (4 years)</option>
-                              <option value={60}>60 months (5 years)</option>
-                              <option value={72}>72 months (6 years)</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Rental Term (months) <span className="text-red-500">*</span></label>
+                            <input type="number" value={equip.rentalTerm} min="3" max="72"
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                handleEquipmentChange(idx, 'rentalTerm', Math.min(72, Math.max(3, val)));
+                              }}
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="3-72 months" />
+                            <p className="text-xs text-gray-500 mt-1">Enter 3-72 months</p>
                           </div>
                         </div>
                         {equip.rentalMonthly > 0 && (
@@ -686,16 +690,15 @@ const FixedEquipmentQuoteTool = () => {
                               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Lease Term (months)</label>
-                            <select value={equip.leaseTerm} onChange={(e) => handleEquipmentChange(idx, 'leaseTerm', parseInt(e.target.value))}
-                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                              <option value={12}>12 months (1 year)</option>
-                              <option value={24}>24 months (2 years)</option>
-                              <option value={36}>36 months (3 years)</option>
-                              <option value={48}>48 months (4 years)</option>
-                              <option value={60}>60 months (5 years)</option>
-                              <option value={72}>72 months (6 years)</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Lease Term (months) <span className="text-red-500">*</span></label>
+                            <input type="number" value={equip.leaseTerm} min="3" max="72"
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                handleEquipmentChange(idx, 'leaseTerm', Math.min(72, Math.max(3, val)));
+                              }}
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                              placeholder="3-72 months" />
+                            <p className="text-xs text-gray-500 mt-1">Enter 3-72 months</p>
                           </div>
                         </div>
                         {equip.leaseAmount > 0 && (
@@ -846,6 +849,14 @@ const FixedEquipmentQuoteTool = () => {
                 const hasEmptyEquipment = formData.equipment.some(e => !e.type);
                 if (hasEmptyEquipment) {
                   alert('Please fill in equipment type for all items');
+                  return;
+                }
+                const hasInvalidTerm = formData.equipment.some(e => {
+                  const term = e.ownership === 'rent' ? e.rentalTerm : e.leaseTerm;
+                  return !term || term < 3 || term > 72;
+                });
+                if (hasInvalidTerm) {
+                  alert('Please enter a valid term (3-72 months) for each equipment item');
                   return;
                 }
                 setStep(3);
@@ -1001,7 +1012,7 @@ const FixedEquipmentQuoteTool = () => {
                     <img 
                       src="/Green Cross Medical Modern Logo.svg" 
                       alt="Reliant Medical Rentals" 
-                      className="h-48 sm:h-64 w-auto"
+                      className="h-24 sm:h-32 w-auto"
                     />
                   </div>
                   <div className="sm:text-right">
@@ -1023,6 +1034,7 @@ const FixedEquipmentQuoteTool = () => {
                   <div className="sm:text-right">
                     <p className="text-xs font-bold text-gray-800 uppercase tracking-wide mb-2">Prepared By</p>
                     <p className="font-semibold text-gray-900">{formData.salesRep}</p>
+                    <p className="text-gray-700 text-sm">{formData.salesRepTitle}</p>
                     <p className="text-gray-600 text-sm">{formData.salesRepEmail}</p>
                     <p className="text-gray-600 text-sm">{formData.salesRepPhone}</p>
                   </div>
